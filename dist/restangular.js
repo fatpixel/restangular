@@ -1,9 +1,19 @@
 /**
  * Restful Resources service for AngularJS apps
- * @version v1.5.2 - 2016-02-08 * @link https://github.com/mgonto/restangular
+ * @version v1.5.3 - 2016-05-30 * @link https://github.com/fatpixel/restangular
  * @author Martin Gontovnikas <martin@gon.to>
  * @license MIT License, http://www.opensource.org/licenses/MIT
- */(function() {
+ */(function (root, factory) {
+  // https://github.com/umdjs/umd/blob/master/templates/returnExports.js
+  if (typeof define === 'function' && define.amd) {
+    define(['angular', 'lodash'], factory);
+  } else if (typeof module === 'object' && module.exports) {
+    module.exports = factory(require('angular'), require('lodash'));
+  } else {
+    // No global export, Restangular will register itself as Angular.js module
+    factory(root._, root.angular);
+  }
+}(this, function (_, angular) {
 
 var restangular = angular.module('restangular', []);
 
@@ -188,12 +198,14 @@ restangular.provider('Restangular', function() {
       oneUrl: 'oneUrl',
       allUrl: 'allUrl',
       customPUT: 'customPUT',
+      customPATCH: 'customPATCH',
       customPOST: 'customPOST',
       customDELETE: 'customDELETE',
       customGET: 'customGET',
       customGETLIST: 'customGETLIST',
       customOperation: 'customOperation',
       doPUT: 'doPUT',
+      doPATCH: 'doPATCH',
       doPOST: 'doPOST',
       doDELETE: 'doDELETE',
       doGET: 'doGET',
@@ -927,20 +939,16 @@ restangular.provider('Restangular', function() {
 
       function addCustomOperation(elem) {
         elem[config.restangularFields.customOperation] = _.bind(customFunction, elem);
-        _.each(['put', 'post', 'get', 'delete'], function(oper) {
+        var requestMethods = { get: customFunction, delete: customFunction };
+        _.each(['put', 'patch', 'post'], function(name) {
+          requestMethods[name] = function(operation, elem, path, params, headers) {
+            return _.bind(customFunction, this)(operation, path, params, headers, elem);
+          };
+        });
+        _.each(requestMethods, function(requestFunc, name) {
+          var callOperation = name === 'delete' ? 'remove' : name;
           _.each(['do', 'custom'], function(alias) {
-            var callOperation = oper === 'delete' ? 'remove' : oper;
-            var name = alias + oper.toUpperCase();
-            var callFunction;
-
-            if (callOperation !== 'put' && callOperation !== 'post') {
-              callFunction = customFunction;
-            } else {
-              callFunction = function(operation, elem, path, params, headers) {
-                return _.bind(customFunction, this)(operation, path, params, headers, elem);
-              };
-            }
-            elem[name] = _.bind(callFunction, elem, callOperation);
+            elem[alias + name.toUpperCase()] = _.bind(requestFunc, elem, callOperation);
           });
         });
         elem[config.restangularFields.customGETLIST] = _.bind(fetchFunction, elem);
@@ -1006,7 +1014,9 @@ restangular.provider('Restangular', function() {
       function restangularizeCollectionAndElements(parent, element, route) {
         var collection = restangularizeCollection(parent, element, route, false);
         _.each(collection, function(elem) {
-          restangularizeElem(parent, elem, route, false);
+          if (elem) {
+            restangularizeElem(parent, elem, route, false);
+          }
         });
         return collection;
       }
@@ -1351,5 +1361,5 @@ restangular.provider('Restangular', function() {
     return createServiceForConfiguration(globalConfiguration);
   }];
 });
-
-})();
+  return restangular.name;
+}));
